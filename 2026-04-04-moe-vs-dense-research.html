@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoE模型与Dense模型深度调研报告</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #fbfbf9;
+      color: #37352f;
+      line-height: 1.8;
+      font-size: 16px;
+    }
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 40px 100px;
+    }
+    .page-header {
+      margin-bottom: 48px;
+    }
+    .page-title {
+      font-size: 30px;
+      font-weight: 700;
+      color: #1a1a1a;
+      line-height: 1.3;
+      margin-bottom: 16px;
+    }
+    .page-meta {
+      font-size: 14px;
+      color: #9b9a97;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .page-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .callout {
+      background: #f7f6f3;
+      border-left: 3px solid #d4d4d4;
+      padding: 14px 18px;
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 36px;
+      border-radius: 0 4px 4px 0;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-top: 48px;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e8e8e4;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-top: 28px;
+      margin-bottom: 12px;
+    }
+    h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    p {
+      margin-bottom: 14px;
+      color: #37352f;
+    }
+    ul, ol {
+      margin: 12px 0 16px 20px;
+    }
+    li {
+      margin-bottom: 6px;
+      color: #37352f;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 16px 0 24px;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px #e8e8e4;
+    }
+    th {
+      background: #f7f6f3;
+      font-weight: 600;
+      font-size: 13px;
+      color: #555;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid #e8e8e4;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #ebebea;
+      color: #37352f;
+      vertical-align: top;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    tr:hover td {
+      background: #fafaf8;
+    }
+    code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      background: #f4f4f0;
+      color: #d12f1b;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    pre {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 18px 20px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 16px 0 24px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #e8e8e4;
+      margin: 40px 0;
+    }
+    .tag {
+      display: inline-block;
+      background: #e8f4e8;
+      color: #2d6a2d;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 3px;
+      margin-right: 6px;
+    }
+    .highlight {
+      background: #fff9e6;
+      padding: 2px 4px;
+      border-radius: 2px;
+    }
+    .footer-note {
+      margin-top: 48px;
+      padding: 20px;
+      background: #f7f6f3;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #777;
+    }
+    .section-divider {
+      text-align: center;
+      margin: 8px 0 32px;
+      color: #ccc;
+      font-size: 20px;
+    }
+    @media (max-width: 600px) {
+      .page { padding: 30px 20px 60px; }
+      .page-title { font-size: 24px; }
+      table { font-size: 13px; }
+      th, td { padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-header">
+    <h1 class="page-title">MoE模型与Dense模型深度调研报告</h1>
+    <div class="page-meta">
+      <span>📅 2026年4月4日</span>
+      <span>🏷️ 调研报告</span>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>调研方向：</strong>架构原理、能力边界、最优场景、成本分析、代表模型、未来趋势
+  </div>
+
+  <h2>一、基本原理与架构差异</h2>
+
+  <h3>1.1 Dense（稠密）模型</h3>
+  <p><strong>核心原理：</strong>Dense模型是最传统的Transformer架构延伸。每次处理任意输入时，模型的全部参数都会参与计算，即"全员上岗"模式。知识分布式存储于所有权重中。</p>
+
+  <p><strong>架构特点：</strong></p>
+  <ul>
+    <li>每个Token经过每一层时，100%的参数都会被激活</li>
+    <li>结构简单、可预期性强，模型质量与参数量呈近似线性关系</li>
+    <li>代表架构：标准Transformer Encoder-Decoder，或仅解码器（Decoder-only）结构</li>
+  </ul>
+
+  <p><strong>代表模型：</strong>BERT、GPT-2、GPT-3、LLaMA 1/2/3（ Dense版本）、Claude系列、GLM-4（ Dense版本）</p>
+
+  <h3>1.2 MoE（混合专家）模型</h3>
+  <p><strong>核心原理：</strong>MoE将传统Transformer中每个前馈网络（FFN）层替换为MoE层，由多个"专家"（Expert）子网络和一个"门控网络"（Gating Network）组成。门控网络根据输入内容动态选择最相关的1至多个专家处理，其余专家保持休眠。</p>
+
+  <p><strong>核心公式：</strong></p>
+  <pre><code>G(x) = Softmax(KeepTopK(H(x), k))</code></pre>
+  <p>其中H(x)是门控函数，k通常取1或2（Top-1或Top-2路由）。</p>
+
+  <p><strong>架构特点：</strong></p>
+  <ul>
+    <li><strong>稀疏激活：</strong>总参数量可扩展至万亿级，但每个Token仅激活一小部分参数</li>
+    <li><strong>知识专业化：</strong>不同专家可学习不同领域知识，减少任务冲突</li>
+    <li>典型配置：8专家Top-2路由（Mixtral）、更细粒度专家+共享专家（DeepSeek）</li>
+  </ul>
+
+  <p><strong>代表模型：</strong>Switch Transformer、GLaM、Mixtral 8x7B、DeepSeek-V2/V3、Grok-1、LLaMA 4、Qwen1.5-MoE</p>
+
+  <h3>1.3 核心架构差异对比</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>Dense模型</th>
+        <th>MoE模型</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>参数激活方式</td>
+        <td>全部激活（100%）</td>
+        <td>稀疏激活（如Top-2约25%）</td>
+      </tr>
+      <tr>
+        <td>总参数量上限</td>
+        <td>受计算成本制约</td>
+        <td>可扩展至万亿级</td>
+      </tr>
+      <tr>
+        <td>计算量</td>
+        <td>与参数量成正比</td>
+        <td>与激活参数量成正比，而非总参数量</td>
+      </tr>
+      <tr>
+        <td>知识存储方式</td>
+        <td>分布式均匀存储</td>
+        <td>专家专业化存储</td>
+      </tr>
+      <tr>
+        <td>任务冲突处理</td>
+        <td>难以避免</td>
+        <td>专家隔离，减少冲突</td>
+      </tr>
+      <tr>
+        <td>训练复杂度</td>
+        <td>相对简单稳定</td>
+        <td>需解决负载均衡、通信开销、训练稳定性</td>
+      </tr>
+      <tr>
+        <td>显存需求</td>
+        <td>与参数量成正比</td>
+        <td>全量参数仍需显存，但计算量更低</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>二、能力边界对比</h2>
+
+  <h3>2.1 MoE模型的优势领域</h3>
+
+  <h4>1. 超大规模参数容纳</h4>
+  <p>MoE在等效计算预算下可支撑4至8倍于Dense模型的参数量。例如Mixtral 8x7B（总参数46.7B）推理时仅激活约12.9B参数，性能却可媲美70B的Dense模型。</p>
+
+  <h4>2. 多任务专业化处理</h4>
+  <p>不同专家可分别专精于不同领域（数学、代码、文学、法律等），在处理跨领域复杂任务时表现出更强的能力分化与专业化。</p>
+
+  <h4>3. 训练效率</h4>
+  <p>Apple研究团队（2024年）的严格对比实验表明，在等效计算预算下MoE模型在多种基准测试中一致优于Dense模型，训练步时间可快3.55倍（如29.6B规模）。</p>
+
+  <h4>4. 长上下文场景</h4>
+  <p>在长上下文推理中，MoE模型的稀疏激活特性使其网络通信开销低于同等规模Dense模型，只要激活专家数量小于专家总数的平方根，即享有通信优势。</p>
+
+  <h3>2.2 MoE模型的短板</h3>
+
+  <h4>1. 全量显存占用高</h4>
+  <p>虽然每个Token计算时只激活部分专家，但总参数量（全量模型）仍需全部加载到显存中。1.6T参数的Switch Transformer全量需要3.2TB存储（QMoE量化后仍需160GB）。</p>
+
+  <h4>2. 负载均衡难题</h4>
+  <p>门控网络容易过度集中选择少数"明星专家"，导致训练效率下降。需引入辅助损失函数鼓励均衡负载，增加了训练复杂度。</p>
+
+  <h4>3. 分布式训练通信开销</h4>
+  <p>多机多卡训练时，专家可能分布在不同设备，跨节点通信瓶颈显著。DeepSeek等通过细粒度专家和共享专家设计缓解此问题。</p>
+
+  <h4>4. Fine-tuning效果不稳定</h4>
+  <p>MoE在指令微调中收益较大，但部分场景下微调效果不如Dense模型稳定，需要更大的Dropout、更高学习率等特殊处理。</p>
+
+  <h3>2.3 Dense模型的能力边界</h3>
+  <p><strong>优势：</strong></p>
+  <ul>
+    <li>任务表现一致稳定，无明显短板</li>
+    <li>训练和部署生态成熟，工具链完善</li>
+    <li>适合端侧和消费级GPU部署（如LLaMA 3.3 70B在双RTX 4090上可运行）</li>
+    <li>微调简单高效，指令遵循能力强</li>
+  </ul>
+
+  <p><strong>短板：</strong></p>
+  <ul>
+    <li>参数量受计算成本严格制约，难以 Scale Up</li>
+    <li>知识存储为分布式全参与，新知识与旧知识可能产生覆盖干扰</li>
+    <li>在超大规模时计算成本呈线性增长，性价比快速下降</li>
+  </ul>
+
+  <h2>三、最优场景分析</h2>
+
+  <h3>3.1 MoE模型的最佳适用场景</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>场景</th>
+        <th>原因</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>超大规模基础模型训练</td>
+        <td>可在固定计算预算下支撑数万亿参数，突破Dense的Scale Up瓶颈</td>
+      </tr>
+      <tr>
+        <td>多领域复杂任务处理</td>
+        <td>专家专业化使不同领域任务获得更强的专项能力</td>
+      </tr>
+      <tr>
+        <td>推理成本敏感的云服务</td>
+        <td>每个Token仅激活少量参数，推理成本显著低于等效Dense模型</td>
+      </tr>
+      <tr>
+        <td>长上下文应用</td>
+        <td>稀疏激活在长序列下通信开销优势明显</td>
+      </tr>
+      <tr>
+        <td>需要高频训练迭代的场景</td>
+        <td>训练速度快（Apple数据显示同预算下快3.55倍）</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>代表场景：</strong>大型云API服务、GPT-4级基础模型训练、DeepSeek-R1类推理模型、多领域专业大模型</p>
+
+  <h3>3.2 Dense模型的最佳适用场景</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>场景</th>
+        <th>原因</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>端侧/边缘部署</td>
+        <td>架构简单，量化方案成熟，生态完善</td>
+      </tr>
+      <tr>
+        <td>中小规模模型需求</td>
+        <td>参数效率高，硬件门槛低（如7B~70B级别）</td>
+      </tr>
+      <tr>
+        <td>需要稳定微调表现的场景</td>
+        <td>训练稳定，指令遵循能力强</td>
+      </tr>
+      <tr>
+        <td>单领域专用模型</td>
+        <td>不需要专家分工，架构简单反而是优势</td>
+      </tr>
+      <tr>
+        <td>企业内部私有化部署</td>
+        <td>运维简单，硬件要求低，调试方便</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>代表场景：</strong>手机端AI助手、企业私有化LLM部署、垂直领域专用模型（如医疗、法律）、学术研究</p>
+
+  <h2>四、成本分析</h2>
+
+  <h3>4.1 训练成本对比</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>指标</th>
+        <th>Dense模型</th>
+        <th>MoE模型</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>等参数量训练速度</td>
+        <td>基准</td>
+        <td>同等算力下快2~4倍</td>
+      </tr>
+      <tr>
+        <td>达到同等质量所需计算量</td>
+        <td>基准</td>
+        <td>节省约50%~75%</td>
+      </tr>
+      <tr>
+        <td>训练稳定性</td>
+        <td>高</td>
+        <td>中等，需辅助损失辅助</td>
+      </tr>
+      <tr>
+        <td>扩展到万亿参数可行性</td>
+        <td>极低（计算不可承受）</td>
+        <td>高（稀疏激活降低计算需求）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>典型案例：</strong></p>
+  <ul>
+    <li>Google GLaM：使用约1/3 GPT-3的计算资源，达到与GPT-3相当的质量</li>
+    <li>Switch Transformer：与T5-XXL相比，预训练速度提升4倍</li>
+    <li>DeepSeek-V3（671B总参数，37B激活）：训练成本远低于等效Dense模型</li>
+  </ul>
+
+  <h3>4.2 推理成本对比</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>指标</th>
+        <th>Dense模型</th>
+        <th>MoE模型</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>每个Token计算量</td>
+        <td>与参数量成正比</td>
+        <td>与激活参数量成正比（通常为总参数的1/8~1/4）</td>
+      </tr>
+      <tr>
+        <td>推理速度（等质量比较）</td>
+        <td>较慢</td>
+        <td>更快（如Mixtral 8x7B ≈ 13B Dense速度）</td>
+      </tr>
+      <tr>
+        <td>全量模型显存</td>
+        <td>与参数量成正比</td>
+        <td>仍需全量显存加载，显存节省有限</td>
+      </tr>
+      <tr>
+        <td>KV缓存开销</td>
+        <td>较大</td>
+        <td>较小（MLA等优化可进一步降低）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>关键洞察：</strong>MoE的推理成本节省主要来自<strong>计算量降低</strong>（激活参数少），而非<strong>显存降低</strong>。部署MoE模型仍需要能装下全量参数的显存，但每次前向传播的计算成本大幅降低。</p>
+
+  <h3>4.3 硬件需求对比</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>Dense模型</th>
+        <th>MoE模型</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>单卡推理最低配置</td>
+        <td>受参数量线性约束</td>
+        <td>全量参数决定最低显存门槛</td>
+      </tr>
+      <tr>
+        <td>分布式训练扩展性</td>
+        <td>较好，但All-to-All通信密集</td>
+        <td>更依赖多机通信，需专门优化</td>
+      </tr>
+      <tr>
+        <td>推荐硬件</td>
+        <td>H100/A100</td>
+        <td>H100（高带宽，支持大规模并行）</td>
+      </tr>
+      <tr>
+        <td>量化兼容性</td>
+        <td>好（GPTQ、AWQ等成熟）</td>
+        <td>一般（需特殊处理，QMoE方案可用）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>推理硬件对照（以2025年主流显卡为例）：</strong></p>
+  <ul>
+    <li>DeepSeek-R1-Distill-Qwen-32B（ Dense蒸馏版）：约14.9GB，适合单RTX 4090（24GB）</li>
+    <li>DeepSeek-R1-Distill-Llama-70B（ Dense蒸馏版）：约43GB，适合双RTX 4090</li>
+    <li>Mixtral 8x7B（ MoE，总47B，激活13B）：激活量≈13B Dense，显存要求仍由47B总参数量决定</li>
+  </ul>
+
+  <h2>五、代表模型盘点</h2>
+
+  <h3>5.1 Dense模型代表</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>模型</th>
+        <th>开发商</th>
+        <th>参数量</th>
+        <th>特点</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>GPT-3</td>
+        <td>OpenAI</td>
+        <td>175B</td>
+        <td>Dense模型标杆，Decoder-only架构</td>
+      </tr>
+      <tr>
+        <td>LLaMA 3.3</td>
+        <td>Meta</td>
+        <td>70B</td>
+        <td>开源Dense模型翘楚，性能超越GPT-4o部分指标</td>
+      </tr>
+      <tr>
+        <td>Claude 3.5/3.7</td>
+        <td>Anthropic</td>
+        <td>未公开</td>
+        <td>长上下文（200K token）能力领先，编程最强</td>
+      </tr>
+      <tr>
+        <td>GLM-4（Dense版）</td>
+        <td>智谱AI</td>
+        <td>130B</td>
+        <td>国产旗舰Dense模型</td>
+      </tr>
+      <tr>
+        <td>BERT</td>
+        <td>Google</td>
+        <td>340M~1.5B</td>
+        <td>Encoder-only架构，NLP预训练里程碑</td>
+      </tr>
+      <tr>
+        <td>DeepSeek-R1（Distill系列）</td>
+        <td>深度求索</td>
+        <td>1.5B~70B</td>
+        <td>基于DeepSeek-V3蒸馏的小模型，性能出色</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 MoE模型代表</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>模型</th>
+        <th>开发商</th>
+        <th>总参数量</th>
+        <th>激活参数</th>
+        <th>特点</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>GPT-4（据传）</td>
+        <td>OpenAI</td>
+        <td>~1.8T</td>
+        <td>未公开</td>
+        <td>传闻采用MoE架构，但官方未确认</td>
+      </tr>
+      <tr>
+        <td>Mixtral 8x7B</td>
+        <td>Mistral AI</td>
+        <td>46.7B</td>
+        <td>12.9B</td>
+        <td>开源MoE标杆，8专家Top-2路由</td>
+      </tr>
+      <tr>
+        <td>DeepSeek-V3</td>
+        <td>深度求索</td>
+        <td>671B</td>
+        <td>37B</td>
+        <td>MLA+MoE架构创新，国产骄傲</td>
+      </tr>
+      <tr>
+        <td>DeepSeek-V2</td>
+        <td>深度求索</td>
+        <td>236B</td>
+        <td>21B</td>
+        <td>首次引入细粒度专家+共享专家</td>
+      </tr>
+      <tr>
+        <td>LLaMA 4</td>
+        <td>Meta</td>
+        <td>未公开</td>
+        <td>未公开</td>
+        <td>2025年发布，采用MoE架构</td>
+      </tr>
+      <tr>
+        <td>GLaM</td>
+        <td>Google</td>
+        <td>1.2T</td>
+        <td>97B</td>
+        <td>首个大规模MoE，Top-2+容量因子路由</td>
+      </tr>
+      <tr>
+        <td>Switch Transformer</td>
+        <td>Google</td>
+        <td>1.6T</td>
+        <td>1 Expert</td>
+        <td>万亿参数里程碑，2048专家</td>
+      </tr>
+      <tr>
+        <td>Grok-1</td>
+        <td>xAI</td>
+        <td>314B</td>
+        <td>稀疏</td>
+        <td>马斯克旗下，开源MoE模型</td>
+      </tr>
+      <tr>
+        <td>Qwen1.5-MoE-A2.7B</td>
+        <td>阿里云</td>
+        <td>~14B</td>
+        <td>2.7B</td>
+        <td>小型高效MoE，适合端侧</td>
+      </tr>
+      <tr>
+        <td>GLM-4V（MoE版）</td>
+        <td>智谱AI</td>
+        <td>多尺寸</td>
+        <td>稀疏</td>
+        <td>国产多模态MoE</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 关键模型技术对比</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>模型</th>
+        <th>架构</th>
+        <th>专家数</th>
+        <th>Top-k</th>
+        <th>共享专家</th>
+        <th>特殊优化</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Mixtral 8x7B</td>
+        <td>标准MoE</td>
+        <td>8</td>
+        <td>2</td>
+        <td>无</td>
+        <td>无</td>
+      </tr>
+      <tr>
+        <td>DeepSeek-V3</td>
+        <td>MoE+MLA</td>
+        <td>64</td>
+        <td>8</td>
+        <td>有</td>
+        <td>多头潜在注意力、FP8训练</td>
+      </tr>
+      <tr>
+        <td>LLaMA 4</td>
+        <td>MoE</td>
+        <td>16+</td>
+        <td>未公开</td>
+        <td>有</td>
+        <td>原生多模态</td>
+      </tr>
+      <tr>
+        <td>Qwen1.5-MoE</td>
+        <td>细粒度MoE</td>
+        <td>更多专家</td>
+        <td>4</td>
+        <td>无</td>
+        <td>专家粒度=1/4 FFN</td>
+      </tr>
+      <tr>
+        <td>Snowflake Arctic</td>
+        <td>Dense-Hybrid MoE</td>
+        <td>128</td>
+        <td>128</td>
+        <td>有</td>
+        <td>Dense与MoE混合</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>六、未来趋势</h2>
+
+  <h3>6.1 MoE将成为超大模型的主流架构</h3>
+  <p>在需要Scale Up至数百亿乃至万亿参数的场景，MoE的稀疏激活特性使其具有不可替代的成本优势。随着训练基础设施成熟（3D并行、FP8、DeepSpeed-MoE等），MoE的工程挑战将被逐步克服，2025年主流大模型（LLaMA 4、DeepSeek-V3/Qwen3等）已全面转向MoE。</p>
+
+  <p><strong>核心驱动力：</strong></p>
+  <ul>
+    <li>每代际算法进步≈4倍算效提升（等效于摩尔定律的平方）</li>
+    <li>Dense模型Scaling Law已接近计算瓶颈</li>
+    <li>稀疏激活符合Amdahl定律的并行化优化方向</li>
+  </ul>
+
+  <h3>6.2 Dense模型在中小规模场景持续重要</h3>
+  <p>70B参数以下，特别是7B~34B区间，Dense模型凭借简单的架构和成熟的部署生态，仍是私有化部署和端侧应用的首选。DeepSeek-R1-Distill系列证明，小型Dense模型配合高质量蒸馏，可在此区间达到优异性能。</p>
+
+  <p><strong>代表方向：</strong></p>
+  <ul>
+    <li>消费级显卡可运行的小型Dense模型（如Qwen2.5 7B~14B）</li>
+    <li>企业私有化部署（运维简单、硬件门槛低）</li>
+    <li>端侧AI（手机、平板）</li>
+  </ul>
+
+  <h3>6.3 混合/变体架构崛起</h3>
+
+  <p><strong>Hybrid-MoE（混合MoE）：</strong>将Dense层与MoE层交替组合，如Nemotron 3 Nano（30B-A3B）交织Mamba-2序列模型与稀疏MoE层，兼具Dense的稳定性和MoE的效率。</p>
+
+  <p><strong>细粒度专家+共享专家（DeepSeek路线）：</strong>将Expert切分更细，减少知识重叠，共享专家处理公共知识，路由专家处理专有知识，已被LLaMA 4等跟进。</p>
+
+  <p><strong>新型路由策略：</strong>2025年研究表明20%的激活率（r=20%）是2B~7B模型的较优甜点，未来将出现更动态、更智能的路由机制。</p>
+
+  <p><strong>多模态MoE：</strong>GLM-4V、Qwen-VL等已将MoE扩展至多模态领域。</p>
+
+  <h3>6.4 量化与压缩技术深化</h3>
+  <p>QMoE等超低位量化方案（1bit以下）已将万亿参数模型的存储压缩至160GB。未来将出现更多针对MoE特性的稀疏量化方法，使超大MoE模型也能在有限硬件条件下部署。</p>
+
+  <h3>6.5 架构融合趋势</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>趋势</th>
+        <th>描述</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>MoE+Transformer进化</td>
+        <td>注意力机制持续优化（MLA、Grouped Query Attention等），与MoE协同</td>
+      </tr>
+      <tr>
+        <td>MoE+Mamba混合</td>
+        <td>将状态空间模型（SSM）的线性复杂度与MoE的专业化结合</td>
+      </tr>
+      <tr>
+        <td>专家数量两极化</td>
+        <td>要么极多小专家（如Nvidia的2048专家），要么少而大的专家（如LLaMA 4）</td>
+      </tr>
+      <tr>
+        <td>动态路由进化</td>
+        <td>根据任务难度自适应激活专家数量，而非固定Top-k</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>七、总结对比表</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>Dense模型</th>
+        <th>MoE模型</th>
+        <th>趋势判断</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>适用规模</strong></td>
+        <td>中小规模（&lt;100B）</td>
+        <td>超大规模（&gt;100B）</td>
+        <td>大模型选MoE，小模型选Dense</td>
+      </tr>
+      <tr>
+        <td><strong>训练成本</strong></td>
+        <td>高</td>
+        <td>低（节省50%~75%）</td>
+        <td>大模型训练全面MoE化</td>
+      </tr>
+      <tr>
+        <td><strong>推理成本</strong></td>
+        <td>高（与参数量成正比）</td>
+        <td>低（稀疏激活）</td>
+        <td>云服务优先MoE</td>
+      </tr>
+      <tr>
+        <td><strong>显存需求</strong></td>
+        <td>与参数量成正比</td>
+        <td>全量参数仍需高显存</td>
+        <td>量化技术将弥补</td>
+      </tr>
+      <tr>
+        <td><strong>多任务能力</strong></td>
+        <td>较弱（全任务竞争）</td>
+        <td>强（专家专业化）</td>
+        <td>复杂任务选MoE</td>
+      </tr>
+      <tr>
+        <td><strong>部署便捷性</strong></td>
+        <td>高（生态成熟）</td>
+        <td>中（需要分布式支持）</td>
+        <td>端侧/企业选Dense</td>
+      </tr>
+      <tr>
+        <td><strong>未来主流</strong></td>
+        <td>中小规模、专用场景</td>
+        <td>超大基础模型、云服务</td>
+        <td>大模型时代属于MoE</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>八、信息来源</h2>
+  <ol>
+    <li>Hugging Face Blog: "混合专家模型 (MoE) 详解"</li>
+    <li>Apple Research: "Revisiting MoE and Dense Speed-Accuracy Comparisons for LLM" (arXiv:2405.15052)</li>
+    <li>美团/港大: "Scaling Laws Across Model Architectures: A Comparative Analysis of Dense and MoE Models" (EMNLP 2024)</li>
+    <li>Medium (@zaiinn440): "MoE vs Dense vs Hybrid LLM Architectures"</li>
+    <li>DeepSeek V3/R1 技术论文及架构分析</li>
+    <li>知乎/CSDN/火山引擎ADG社区相关技术文章</li>
+    <li>Sebastian Raschka "The Big LLM Architecture Comparison"</li>
+    <li>FriendliAI: "Comparing 2025's Leading Mixture-of-Experts AI Models"</li>
+    <li>BetterYeah: "2025年最全面最新15款主流大模型技术对比"</li>
+    <li>各模型官方技术文档与Model Card</li>
+  </ol>
+
+  <div class="footer-note">
+    *本报告由AI辅助调研生成，数据截至2026年4月。模型技术快速演进，建议持续关注最新进展。
+  </div>
+
+</div>
+</body>
+</html>
